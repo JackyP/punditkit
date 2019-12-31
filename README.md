@@ -7,7 +7,7 @@ pip install punditkit
 ``
 
 ## Running
-
+Suppose you have a file called ``iris.csv``. Then you would run:
 ``
 punditkit iris.csv
 ``

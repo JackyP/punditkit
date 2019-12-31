@@ -1,5 +1,6 @@
 import streamlit as st
 import matplotlib.pyplot as plt
+import sys
 
 # Data
 import pandas as pd
@@ -30,9 +31,9 @@ classifiers = all_estimators(type_filter="classifier")
 # 6. Variable Importance
 # 7. Partial Dependency Plot
 
-st.sidebar.title("PunditKit: Visualise Scikit-learn Models")
+st.sidebar.title("PunditKit: Visual Interface to Scikit-learn")
 
-IRIS_CSV = "https://gist.githubusercontent.com/netj/8836201/raw/6f9306ad21398ea43cba4f7d537619d0e07d5ae3/iris.csv"
+data_location = sys.argv[1]
 
 # 1. Read data
 @st.cache
@@ -41,7 +42,7 @@ def get_data(filename_or_url):
     return df
 
 
-df = get_data(IRIS_CSV)
+df = get_data(data_location)
 
 df_cols = df.columns.tolist()
 
@@ -157,6 +158,11 @@ st.write("### Model Predictions Plots")
 
 pdp_feature_1 = st.sidebar.selectbox("Plot Feature", options=features, index=0)
 
-plot_partial_dependence(pipe, X_train, [pdp_feature_1], target="Virginica")
+if is_numeric_dtype(df[response]) | (df[response].nunique() <= 2):
+    plot_partial_dependence(pipe, X_train, [pdp_feature_1])
+else:
+    for x in pd.unique(df[response]).tolist():
+        plot_partial_dependence(pipe, X_train, [pdp_feature_1], target=x)
+
 fig.tight_layout()
 st.pyplot()

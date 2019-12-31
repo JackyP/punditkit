@@ -1,9 +1,10 @@
 import os
 import sys
 import streamlit.bootstrap as bootstrap
+from pathlib import Path
 
 
 def run():
-    path = os.path.abspath(sys.argv[0].replace("run.py", "modelling.py"))
-    print(path)
-    bootstrap.run(path, command_line="", args="")
+    path = (Path(__file__).parent / "modelling.py").absolute()
+    arg1 = sys.argv[1]
+    bootstrap.run(path, command_line=os.getcwd(), args={arg1})
