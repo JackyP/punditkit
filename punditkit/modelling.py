@@ -79,19 +79,30 @@ if response in features:
 
 
 # 2. Select Model
-def get_models(df, response):
-    if is_numeric_dtype(df[response]):
-        return regressors
+@st.cache
+def get_models(df, is_numeric):
+    if is_numeric:
+        return (
+            [x[0] for x in regressors],
+            [x[1] for x in regressors],
+            [x[0] for x in regressors].index("DecisionTreeRegressor"),
+        )
     else:
-        return classifiers
+        return (
+            [x[0] for x in classifiers],
+            [x[1] for x in classifiers],
+            [x[0] for x in classifiers].index("DecisionTreeClassifier"),
+        )
 
 
-models = get_models(df, response)
-model_names = [x[0] for x in models]
+model_names, models, model_default_ind = get_models(df, is_numeric_dtype(df[response]))
 
-selected_model_name = st.sidebar.selectbox("Choose model", options=model_names)
+# Default to DecisionTree because it estimates fairly quickly compared to other models
+selected_model_name = st.sidebar.selectbox(
+    "Choose model", options=model_names, index=model_default_ind
+)
 
-SelectedModel = models[model_names.index(selected_model_name)][1]
+SelectedModel = models[model_names.index(selected_model_name)]
 
 st.write(f"# {selected_model_name}")
 
