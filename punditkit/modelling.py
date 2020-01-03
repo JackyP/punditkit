@@ -198,8 +198,8 @@ def make_fit_pipe(
 
     preprocessing = ColumnTransformer(
         [
-            ("cat", categorical_pipe, categorical_columns),
-            ("num", numerical_pipe, numerical_columns),
+            ("cat", categorical_pipe, [features.index(x) for x in categorical_columns]),
+            ("num", numerical_pipe, [features.index(x) for x in numerical_columns]),
         ]
     )
 
@@ -231,9 +231,9 @@ st.markdown(href, unsafe_allow_html=True)
 
 # Evaluate predictions
 st.write("## Predictions")
-st.markdown("Explanations use [LIME](https://github.com/marcotcr/lime).")
 
 # - Build form
+st.write("### Input:")
 list_form = []
 for col in features:
     if col in numerical_columns:
@@ -248,11 +248,24 @@ for col in features:
 
 df_form = pd.DataFrame([list_form], columns=features)
 
-st.write("df_form", df_form)
-st.write("X_train.iloc[:,:]", type(X_train.iloc[:, :]))
+if is_numeric_dtype(df[response]):
+    st.write("### Prediction:", pipe.predict(df_form))
+else:
+    st.write("## Predict:", pipe.predict_proba(df_form))
+
+st.write("### Explanation:")
+st.markdown(
+    "Explanations use [LIME](https://github.com/marcotcr/lime) to derive a linear interpretation of the prediction."
+)
+
+num_important = st.slider(
+    "Number of features to display:",
+    min_value=1,
+    max_value=len(features),
+    value=min(5, len(features)),
+)
 
 # - Lime form result
-
 if is_numeric_dtype(df[response]):
     explainer = lime.lime_tabular.LimeTabularExplainer(
         X_train.values,
@@ -262,7 +275,11 @@ if is_numeric_dtype(df[response]):
         categorical_features=categorical_columns,
         mode="regression",
     )
-    exp = explainer.explain_instance(X_train.values[1], pipe.predict, num_features=2)
+
+    exp = explainer.explain_instance(
+        df_form.values[0], pipe.predict, num_features=num_important
+    )
+    fig = exp.as_pyplot_figure()
 else:
     explainer = lime.lime_tabular.LimeTabularExplainer(
         X_train.values,
@@ -271,10 +288,16 @@ else:
         discretize_continuous=True,
         categorical_features=categorical_columns,
     )
+
     exp = explainer.explain_instance(
-        X_train.values[1], pipe.predict_proba, num_features=2, top_labels=1
+        df_form.values[0], pipe.predict_proba, num_features=num_important, top_labels=1
     )
 
+    fig = exp.as_pyplot_figure(
+        label=pipe.classes_.tolist().index(pipe.predict(df_form)[0])
+    )
+
+fig.tight_layout()
 st.pyplot()
 
 # Exploratory Data Analysis - Column Info
@@ -358,7 +381,7 @@ df_sample = df.sample(n=sample_row_count, random_state=42)
 df_sample[selected_model_name] = pipe.predict(df_sample[features])
 
 top_features = X_train.columns[sorted_idx].tolist()
-top_features = top_features[-min(5, len(top_features)) :]
+top_features = top_features[-num_important:]
 
 
 def top_features_pair_plot(df, top_features, response):
