@@ -77,7 +77,8 @@ classifiers = [x for x in classifiers if x[0] not in excluded_classifiers]
 # 9. Partial Dependency Plot
 
 
-st.sidebar.title("PunditKit: Visual Interface to Scikit-learn")
+st.sidebar.title("PunditKit")
+st.sidebar.markdown("##### Simplify. Visualise. Learn.")
 
 # Hide footer
 st.markdown(
@@ -119,16 +120,18 @@ response = st.sidebar.selectbox(
 features = st.sidebar.multiselect("Choose features", df_cols, df_cols[:-1])
 
 if not features:
-    st.error("Please select at least one feature.")
+    st.sidebar.error("Error: Please select at least one feature.")
 
 if not response:
-    st.error("Please select a response.")
+    st.sidebar.error("Error: Please select a response.")
 
 if response in features:
-    st.sidebar.warning("Response is in list of features.")
+    st.sidebar.error("Error: Response is in list of features.")
 
 if df[response].isnull().values.any():
-    st.warning("Response contains NaN values. These will be dropped in training.")
+    st.sidebar.warning(
+        "Warning: Response contains NaN values. These records will be dropped in model training."
+    )
 
 # Select Model
 @st.cache
@@ -233,15 +236,25 @@ st.markdown(href, unsafe_allow_html=True)
 st.write("## Predictions")
 
 # - Build form
-st.write("### Input:")
+st.write(
+    """### Input:
+Select feature values for the model to predict.
+"""
+)
 list_form = []
 for col in features:
     if col in numerical_columns:
         mn = df[col].min()
         mx = df[col].max()
-        sp = (mx - mn) / 100
-        sp = round(sp, 1 - int(floor(log10(abs(sp)))) - 1)
-        val = st.slider(col, min_value=mn, max_value=mx, step=sp, value=df[col].mean())
+        if mx > mn:
+            sp = (mx - mn) / 100
+            sp = round(sp, 1 - int(floor(log10(abs(sp)))) - 1)
+
+            val = st.slider(
+                col, min_value=mn, max_value=mx, step=sp, value=df[col].mean()
+            )
+        else:
+            val = mx
     else:
         val = st.selectbox(col, options=pd.unique(df[col]), value=df[col].mode())
     list_form += [val]
@@ -249,21 +262,27 @@ for col in features:
 df_form = pd.DataFrame([list_form], columns=features)
 
 if is_numeric_dtype(df[response]):
-    st.write("### Prediction:", pipe.predict(df_form))
+    st.write("### Predicted Value:", pipe.predict(df_form).item())
 else:
-    st.write("## Predict:", pipe.predict_proba(df_form))
+    st.write(
+        "### Predicted Probabilities:",
+        pd.DataFrame(pipe.predict_proba(df_form), columns=pipe.classes_.tolist()),
+    )
 
 st.write("### Explanation:")
 st.markdown(
     "Explanations use [LIME](https://github.com/marcotcr/lime) to derive a linear interpretation of the prediction."
 )
 
-num_important = st.slider(
-    "Number of features to display:",
-    min_value=1,
-    max_value=len(features),
-    value=min(5, len(features)),
-)
+if len(features) > 1:
+    num_important = st.slider(
+        "Number of features to display:",
+        min_value=1,
+        max_value=len(features),
+        value=min(5, len(features)),
+    )
+else:
+    num_important = 1
 
 # - Lime form result
 if is_numeric_dtype(df[response]):
@@ -301,7 +320,7 @@ fig.tight_layout()
 st.pyplot()
 
 # Exploratory Data Analysis - Column Info
-st.write("## Column Information")
+st.write("## Data Description")
 st.markdown(
     "A summary of the features is included below for a reasonableness review of the input data."
 )
@@ -315,20 +334,46 @@ if len(has_na_features) > 0:
             str(has_na_features)
         )
     )
+st.write("## Data Sample")
+
+# Limit features to fit on the poge and rows for compute time
+sample_row_count = st.slider(
+    label="Sample size:",
+    min_value=1,
+    max_value=len(df.index),
+    value=min(100, len(df.index)),
+)
+df_sample = df.sample(n=sample_row_count, random_state=42)
+st.dataframe(df_sample)
+
+st.markdown(
+    """To quickly generate results, only a sample of the data is displayed for
+the scatter and partial dependence plots in the later sections."""
+)
 
 # Performance on holdout data
 if is_numeric_dtype(df[response]):
-    st.write("## Prediction Error (Test Set)")
+    st.write("## Prediction Error - (Test Set)")
+    st.markdown(
+        """Model performance on holdout test data is presented below
+with a [Prediction Error Plot](https://www.scikit-yb.org/en/latest/api/regressor/peplot.html)
+comparing actual vs predicted values."""
+    )
     visualizer = PredictionError(pipe)
 else:
     st.write("## Confusion Matrix (Test Set)")
+    st.markdown(
+        """Model performance on holdout test data is summarised below with
+a [Confusion Matrix](https://www.scikit-yb.org/en/latest/api/classifier/confusion_matrix.html)
+comparing actual vs predicted values. Values along the diagonal indicate a correct prediction.
+"""
+    )
     visualizer = ConfusionMatrix(pipe)
 
 
 visualizer.score(X_test, y_test)
 visualizer.show()
 
-st.markdown("Model performance on holdout test data is summarised below.")
 
 st.pyplot()
 
@@ -346,7 +391,7 @@ def importance(pipe, X_train, y_train):
 
 perm_imp, sorted_idx = importance(pipe, X_train, y_train)
 
-st.write("### Permutation Feature Importance (Train Set)")
+st.write("## Permutation Feature Importance (Train Set)")
 
 fig, ax = plt.subplots()
 ax.boxplot(
@@ -356,7 +401,8 @@ ax.boxplot(
 fig.tight_layout()
 
 st.markdown(
-    "[Permutation importance](https://scikit-learn.org/stable/modules/permutation_importance.html) is a measure of the criticality of a feature within a model."
+    """[Permutation importance](https://scikit-learn.org/stable/modules/permutation_importance.html)
+is a measure of the contribution of a feature to the model predictions."""
 )
 
 st.pyplot()
@@ -364,20 +410,8 @@ st.pyplot()
 # Key variables pairplot.
 # Seaborn pair grid
 st.markdown("## Pair Grid (Scatter) - Actual")
-st.markdown(
-    "To quickly show results, only a sample of the data is displayed for the scatter and partial dependence plots. Set the sample size below:"
-)
 
-# Limit features to fit on the poge and rows for compute time
 
-sample_row_count = st.slider(
-    label="Sample size:",
-    min_value=1,
-    max_value=len(df.index),
-    value=min(100, len(df.index)),
-)
-
-df_sample = df.sample(n=sample_row_count, random_state=42)
 df_sample[selected_model_name] = pipe.predict(df_sample[features])
 
 top_features = X_train.columns[sorted_idx].tolist()
