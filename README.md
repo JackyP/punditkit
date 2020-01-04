@@ -1,4 +1,4 @@
-# PunditKit:
+# PunditKit
 Simplify. Visualise. Learn.
 
 ![Screenshot](Screenshot.jpg)
