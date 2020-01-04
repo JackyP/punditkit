@@ -1,6 +1,8 @@
 import streamlit as st
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.colors import ListedColormap
 import seaborn as sns
 import sys
 import pickle
@@ -8,6 +10,7 @@ import base64
 
 # Data
 import pandas as pd
+import numpy as np
 
 from pandas.api.types import is_numeric_dtype
 from sklearn.model_selection import train_test_split
@@ -31,6 +34,7 @@ from sklearn.inspection import permutation_importance
 from pdpbox import pdp
 from yellowbrick.regressor import PredictionError
 from yellowbrick.classifier.confusion_matrix import ConfusionMatrix
+from mlxtend.plotting import plot_decision_regions
 
 regressors = all_estimators(type_filter="regressor")
 classifiers = all_estimators(type_filter="classifier")
@@ -66,21 +70,23 @@ classifiers = [x for x in classifiers if x[0] not in excluded_classifiers]
 
 
 # Contents
-# 1. Read data
-# 2. Select model
-# 3. Fit model
-# 4. Evaluate predictions
-# 5. Column summary
-# 6. Save model
-# 7. Holdout data
-# 8. Variable Importance
-# 9. Partial Dependency Plot
+# - Read data
+# - Select model
+# - Fit model
+# - Save model
+# - Evaluate predictions
+# - Column summary
+# - Holdout performance
+# - Variable importance
+# - Partial dependence
 
 
 st.sidebar.title("PunditKit")
 st.sidebar.markdown("##### Simplify. Visualise. Learn.")
 
 # Hide footer
+# Hide button
+# Make wider because we have many plots
 st.markdown(
     """
         <style>
@@ -90,6 +96,10 @@ st.markdown(
         #MainMenuButton {
             visibility: hidden;
         }
+        .reportview-container .main .block-container {
+            max-width: 1000px;
+        }
+
         </style>
     """,
     unsafe_allow_html=True,
@@ -242,24 +252,29 @@ Select feature values for the model to predict.
 """
 )
 list_form = []
+default_form = []
 for col in features:
     if col in numerical_columns:
         mn = df[col].min()
         mx = df[col].max()
+        defv = df[col].mean()
         if mx > mn:
             sp = (mx - mn) / 100
             sp = round(sp, 1 - int(floor(log10(abs(sp)))) - 1)
 
-            val = st.slider(
-                col, min_value=mn, max_value=mx, step=sp, value=df[col].mean()
-            )
+            val = st.slider(col, min_value=mn, max_value=mx, step=sp, value=defv)
         else:
             val = mx
+
     else:
-        val = st.selectbox(col, options=pd.unique(df[col]), value=df[col].mode())
+        defv = df[col].mode()
+        val = st.selectbox(col, options=pd.unique(df[col]), value=defv)
     list_form += [val]
+    default_form += [defv]
 
 df_form = pd.DataFrame([list_form], columns=features)
+df_default = pd.DataFrame([default_form], columns=features)
+df_default_no_col = pd.DataFrame([default_form])
 
 if is_numeric_dtype(df[response]):
     st.write("### Predicted Value:", pipe.predict(df_form).item())
@@ -279,7 +294,7 @@ if len(features) > 1:
         "Number of features to display:",
         min_value=1,
         max_value=len(features),
-        value=min(5, len(features)),
+        value=min(4, len(features)),
     )
 else:
     num_important = 1
@@ -409,45 +424,128 @@ st.pyplot()
 
 # Key variables pairplot.
 # Seaborn pair grid
-st.markdown("## Pair Grid (Scatter) - Actual")
+st.markdown("## Pair Grid")
+st.markdown(
+    """The grid below shows:
+ - Upper triangle: Two way scatter plot of values and decision boundaries,
+ - Diagonal: Histogram and distribution of values by feature,
+ - Lower triangle: Left blank.
+"""
+)
 
 
 df_sample[selected_model_name] = pipe.predict(df_sample[features])
 
 top_features = X_train.columns[sorted_idx].tolist()
-top_features = top_features[-num_important:]
+top_features.reverse()
+top_features_n = top_features[:num_important]
 
 
-def top_features_pair_plot(df, top_features, response):
-    """ Returns a pair plot of top features
+def classifier_pair_plot(df, pipe, top_features, features, response):
+    """ Returns a pair plot of top features for a classifier
     """
-    # @st.cache can't seem to cache with current version streamlit?
-
+    dim_features = len(top_features)
     mpl.rcParams.update(mpl.rcParamsDefault)
-    # Set colour scheme - blue to red for numeric, bright colours categoricals.
-    if is_numeric_dtype(df[response]):
-        pal = sns.color_palette("RdBu_r", 10)
+    # df_not_na = df[top_features + [response]].dropna()
+    is_numeric = is_numeric_dtype(df[response])
+
+    if is_numeric:
+        pal0 = sns.color_palette("GnBu_d", 10)
+        pal1 = sns.color_palette("GnBu_r", 10)
     else:
-        pal = sns.color_palette()
+        pal0 = sns.color_palette("muted", df[response].nunique())
+        pal1 = sns.color_palette("bright", df[response].nunique())
+    # g = sns.PairGrid(df_not_na, vars=top_features, hue=response, palette=pal)
 
-    df_not_na = df[top_features + [response]].dropna()
-    g = sns.PairGrid(df_not_na, vars=top_features, hue=response, palette=pal)
-    g.map(plt.scatter)
-    return g
+    gs = gridspec.GridSpec(dim_features, dim_features)
+    fig = plt.figure()
+
+    # Dummy classifier
+    class clf:
+        model = pipe
+        is_num = is_numeric
+
+        def predict(self, X):
+            y = self.model.predict(X)
+            if self.is_num:
+                return pd.qcut(y, 10, labels=False, duplicates="drop")
+            else:
+                return np.searchsorted(pipe.classes_, y)
+
+    clf0 = clf()
+
+    if is_numeric:
+        resp_plt = pd.qcut(df[response], 10, labels=False, duplicates="drop").values
+    else:
+        resp_plt = df[response].astype("category").cat.codes.values
+
+    # Diag
+    lims = []
+    for row_i in range(0, dim_features):
+        ax = plt.subplot(gs[row_i, row_i])
+        f_ind_i = features.index(top_features[row_i])
+        # plt.hist(x=df.iloc[:, f_ind_i])
+        ax = sns.distplot(df.iloc[:, f_ind_i])
+        plt.ylabel("Count")
+        plt.xlabel(features[f_ind_i])
+        lims += [plt.xlim()]
+        # plt.xlim((df.iloc[:, f_ind_i].min(), df.iloc[:, f_ind_i].max()))
+
+    # Upper:
+    indices = zip(*np.triu_indices(dim_features, k=1))
+
+    # indices = zip(*np.triu_indices_from(g.axes, 1))
+    for row_i, col_j in indices:
+
+        # ax = g.axes[row_i, col_j]
+        plt.subplot(gs[row_i, col_j])
+        f_ind_i = features.index(top_features[row_i.item()])
+        f_ind_j = features.index(top_features[col_j.item()])
+        filler_ind = [
+            x for x in list(range(0, dim_features)) if x not in [f_ind_i, f_ind_j]
+        ]
+        filler = df_default_no_col[filler_ind].to_dict("records")[0]
+        plot_decision_regions(
+            X=df[features].values,
+            y=resp_plt,
+            feature_index=(f_ind_j, f_ind_i),
+            filler_feature_values=filler,
+            clf=clf0,
+            colors=",".join(pal0.as_hex()),
+        )
+        if len(filler_ind) > 0:
+            plt.scatter(
+                x=df.iloc[:, f_ind_j],
+                y=df.iloc[:, f_ind_i],
+                c=resp_plt,
+                cmap=ListedColormap(pal1.as_hex()),
+            )
+            plt.xlabel(features[f_ind_j])
+            plt.ylabel(features[f_ind_i])
+            plt.xlim(lims[col_j])
+            plt.ylim(lims[row_i])
+
+    # Lower Diag
+    indices = zip(*np.tril_indices(dim_features, k=-1))
+    for row_i, col_j in indices:
+        ax = plt.subplot(gs[row_i, col_j])
+        ax.set_facecolor("grey")
+        f_ind_i = features.index(top_features[row_i.item()])
+        f_ind_j = features.index(top_features[col_j.item()])
+        plt.xlim(lims[col_j])
+        plt.ylim(lims[row_i])
+        plt.xlabel(features[f_ind_j])
+        plt.ylabel(features[f_ind_i])
+
+    fig.tight_layout()
 
 
-g = top_features_pair_plot(df_sample, top_features, response)
-st.pyplot()
-
-# Partial Dependence
-st.write("## Pair Grid (Scatter) - Predicted")
-
-g = top_features_pair_plot(df_sample, top_features, selected_model_name)
+classifier_pair_plot(df, pipe, top_features_n, features, response)
 st.pyplot()
 
 st.write("## Model Predictions One-Way Plots")
 
-pdp_feature_1 = st.selectbox("Plot Feature", options=features, index=0)
+pdp_feature_1 = st.selectbox("Plot Feature", options=top_features, index=0)
 
 if is_numeric_dtype(df[pdp_feature_1]):
     pdp_isol = pdp.pdp_isolate(
