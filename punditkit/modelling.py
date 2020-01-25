@@ -129,6 +129,14 @@ response = st.sidebar.selectbox(
 )
 features = st.sidebar.multiselect("Choose features", df_cols, df_cols[:-1])
 
+numerical_columns = [x for x in features if is_numeric_dtype(df[x])]
+categorical_columns = [x for x in features if not is_numeric_dtype(df[x])]
+
+# Reorder to be numerical then categorical to preserve column order in
+# the transformers in scikit pipeline
+
+features = numerical_columns + categorical_columns
+
 if not features:
     st.sidebar.error("Error: Please select at least one feature.")
 
@@ -212,20 +220,20 @@ def make_fit_pipe(
     # Standardize numeric
     prenumeric = ColumnTransformer(
         [
-            ("cat", categorical_pipe, [features.index(x) for x in categorical_columns]),
             ("numimp", SimpleImputer(), [features.index(x) for x in numerical_columns]),
+            ("cat", categorical_pipe, [features.index(x) for x in categorical_columns]),
         ]
     )
 
     # One Hot for most Sci-kit Learn functions.
     preprocessing = ColumnTransformer(
         [
+            ("num", RobustScaler(), [features.index(x) for x in numerical_columns]),
             (
                 "onehot",
                 OneHotEncoder(sparse=False),
                 [features.index(x) for x in categorical_columns],
             ),
-            ("num", RobustScaler(), [features.index(x) for x in numerical_columns]),
         ]
     )
 
@@ -240,9 +248,6 @@ def make_fit_pipe(
     pipe.fit(X_train, y_train)
     return pipe
 
-
-numerical_columns = [x for x in features if is_numeric_dtype(df[x])]
-categorical_columns = [x for x in features if not is_numeric_dtype(df[x])]
 
 pipe = make_fit_pipe(
     categorical_columns, numerical_columns, X_train, y_train, SelectedModel
@@ -542,7 +547,11 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
         ax = plt.subplot(gs[row_i, row_i])
         f_ind_i = features.index(top_features[row_i])
         # plt.hist(x=df.iloc[:, f_ind_i])
-        ax = sns.distplot(df.iloc[:, f_ind_i])
+        if is_numeric_dtype(df.iloc[:, f_ind_i]):
+            ax = sns.distplot(df.iloc[:, f_ind_i])
+        else:
+            ax = df.groupby(df.columns[f_ind_i]).agg("count").plot.bar()
+
         plt.ylabel("Count")
         plt.xlabel(features[f_ind_i])
         lims += [plt.xlim()]
