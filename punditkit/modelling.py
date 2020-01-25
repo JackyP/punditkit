@@ -24,7 +24,7 @@ import lime.lime_tabular
 # Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, RobustScaler
 from sklearn.pipeline import Pipeline
 
 from sklearn.utils import all_estimators
@@ -201,22 +201,41 @@ y_train = y_train[~pd.isnull(y_train)]
 def make_fit_pipe(
     categorical_columns, numerical_columns, X_train, y_train, SelectedModel
 ):
+    # Ordinal encoder for lime
     categorical_pipe = Pipeline(
         [
             ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
-            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse=False)),
+            ("ordinal", OrdinalEncoder()),
         ]
     )
-    numerical_pipe = Pipeline([("imputer", SimpleImputer(strategy="mean"))])
 
-    preprocessing = ColumnTransformer(
+    # Standardize numeric
+    prenumeric = ColumnTransformer(
         [
             ("cat", categorical_pipe, [features.index(x) for x in categorical_columns]),
-            ("num", numerical_pipe, [features.index(x) for x in numerical_columns]),
+            ("numimp", SimpleImputer(), [features.index(x) for x in numerical_columns]),
         ]
     )
 
-    pipe = Pipeline([("preprocess", preprocessing), ("estimator", SelectedModel())])
+    # One Hot for most Sci-kit Learn functions.
+    preprocessing = ColumnTransformer(
+        [
+            (
+                "onehot",
+                OneHotEncoder(sparse=False),
+                [features.index(x) for x in categorical_columns],
+            ),
+            ("num", RobustScaler(), [features.index(x) for x in numerical_columns]),
+        ]
+    )
+
+    pipe = Pipeline(
+        [
+            ("prenumeric", prenumeric),
+            ("preprocess", preprocessing),
+            ("estimator", SelectedModel()),
+        ]
+    )
 
     pipe.fit(X_train, y_train)
     return pipe
@@ -255,20 +274,34 @@ list_form = []
 default_form = []
 for col in features:
     if col in numerical_columns:
-        mn = df[col].min()
-        mx = df[col].max()
+        mn = df[col].min().item()
+        mx = df[col].max().item()
         defv = df[col].mean()
+
         if mx > mn:
             sp = (mx - mn) / 100
             sp = round(sp, 1 - int(floor(log10(abs(sp)))) - 1)
 
-            val = st.slider(col, min_value=mn, max_value=mx, step=sp, value=defv)
+            if df[col].dtype == np.int64:
+                defv = np.ceil(defv).astype(int).item()
+                sp = np.ceil(sp).astype(int).item()
+
+            val = st.slider(
+                "{} ({})".format(col, df[col].dtype),
+                min_value=mn,
+                max_value=mx,
+                step=sp,
+                value=defv,
+            )
         else:
             val = mx
 
     else:
-        defv = df[col].mode()
-        val = st.selectbox(col, options=pd.unique(df[col]), value=defv)
+        defv = df[col].mode().item()
+        uniq = pd.unique(df[col]).tolist()
+        val = st.selectbox(
+            "{} ({})".format(col, df[col].dtype), options=uniq, index=uniq.index(defv)
+        )
     list_form += [val]
     default_form += [defv]
 
@@ -300,35 +333,52 @@ else:
     num_important = 1
 
 # - Lime form result
+# Categorical variables - need to be put into lime as integers
+categorical_feature_indices = [features.index(x) for x in categorical_columns]
+
+transform_lime = pipe.named_steps["prenumeric"]
+
+pipe_lime = Pipeline(
+    [
+        ("preprocess", pipe.named_steps["preprocess"]),
+        ("estimator", pipe.named_steps["estimator"]),
+    ]
+)
+data_lime = transform_lime.transform(X_train.values)
+df_form_lime = transform_lime.transform(df_form.values)  # df_form.values[0]
+
 if is_numeric_dtype(df[response]):
     explainer = lime.lime_tabular.LimeTabularExplainer(
-        X_train.values,
+        data_lime,
         feature_names=features,
         class_names=[response],
         discretize_continuous=True,
-        categorical_features=categorical_columns,
+        categorical_features=categorical_feature_indices,
         mode="regression",
     )
 
     exp = explainer.explain_instance(
-        df_form.values[0], pipe.predict, num_features=num_important
+        df_form_lime[0], pipe_lime.predict, num_features=num_important
     )
     fig = exp.as_pyplot_figure()
 else:
     explainer = lime.lime_tabular.LimeTabularExplainer(
-        X_train.values,
+        data_lime,
         feature_names=features,
         class_names=pipe.classes_.tolist(),
         discretize_continuous=True,
-        categorical_features=categorical_columns,
+        categorical_features=categorical_feature_indices,
     )
 
     exp = explainer.explain_instance(
-        df_form.values[0], pipe.predict_proba, num_features=num_important, top_labels=1
+        df_form_lime[0],
+        pipe_lime.predict_proba,
+        num_features=num_important,
+        top_labels=1,
     )
 
     fig = exp.as_pyplot_figure(
-        label=pipe.classes_.tolist().index(pipe.predict(df_form)[0])
+        label=pipe_lime.classes_.tolist().index(pipe_lime.predict(df_form_lime)[0])
     )
 
 fig.tight_layout()
