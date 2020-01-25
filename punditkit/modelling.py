@@ -425,6 +425,13 @@ with a [Prediction Error Plot](https://www.scikit-yb.org/en/latest/api/regressor
 comparing actual vs predicted values."""
     )
     visualizer = PredictionError(pipe)
+
+    st.write("Standard error: ", np.std(pipe.predict(X_test) - y_test, ddof=1))
+
+    st.write(
+        "Coefficient of variation: ",
+        np.std(pipe.predict(X_test) - y_test, ddof=1) / np.mean(y_test),
+    )
 else:
     st.write("## Confusion Matrix (Test Set)")
     st.markdown(
