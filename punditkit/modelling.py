@@ -555,7 +555,7 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
         if is_numeric_dtype(df.loc[:, feature_name]):
             ax = sns.distplot(df.loc[:, feature_name])
         else:
-            ax = df.groupby(df.columns[feature_name]).agg("count").plot.bar()
+            ax = df.groupby(feature_name).agg("count").plot.bar()
 
         plt.ylabel("Count")
         plt.xlabel(feature_name)
@@ -588,8 +588,8 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
         )
         if len(filler_ind) > 0:
             plt.scatter(
-                x=df.iloc[:, f_ind_j],
-                y=df.iloc[:, f_ind_i],
+                x=df.loc[:, feature_name_j],
+                y=df.loc[:, feature_name_i],
                 c=resp_plt,
                 cmap=ListedColormap(pal1.as_hex()),
             )
