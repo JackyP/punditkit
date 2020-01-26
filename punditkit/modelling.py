@@ -590,6 +590,7 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
             plt.scatter(
                 x=df.loc[:, feature_name_j],
                 y=df.loc[:, feature_name_i],
+                s=3,
                 c=resp_plt,
                 cmap=ListedColormap(pal1.as_hex()),
             )
