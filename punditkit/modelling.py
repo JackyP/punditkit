@@ -577,7 +577,13 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
         filler_ind = [
             x for x in list(range(0, dim_features)) if x not in [f_ind_i, f_ind_j]
         ]
-        filler = df_default_no_col[filler_ind].to_dict("records")[0]
+        # mlxtend decision regions requries a dummy set of variables if there
+        # are more than two features.
+        if len(features) > 2:
+            filler = df_default_no_col[filler_ind].to_dict("records")[0]
+        else:
+            filler = None
+
         plot_decision_regions(
             X=df[features].values,
             y=resp_plt,
