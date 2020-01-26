@@ -508,6 +508,7 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
     """
     dim_features = len(top_features)
     mpl.rcParams.update(mpl.rcParamsDefault)
+    mpl.rcParams.update({"font.size": 8})  # For readability
     # df_not_na = df[top_features + [response]].dropna()
     is_numeric = is_numeric_dtype(df[response])
 
