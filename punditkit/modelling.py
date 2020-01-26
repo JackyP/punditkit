@@ -545,15 +545,16 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
     lims = []
     for row_i in range(0, dim_features):
         ax = plt.subplot(gs[row_i, row_i])
-        f_ind_i = features.index(top_features[row_i])
+        feature_name = top_features[row_i]
+        f_ind_i = features.index(feature_name)
         # plt.hist(x=df.iloc[:, f_ind_i])
-        if is_numeric_dtype(df.iloc[:, f_ind_i]):
-            ax = sns.distplot(df.iloc[:, f_ind_i])
+        if is_numeric_dtype(df.loc[:, feature_name]):
+            ax = sns.distplot(df.loc[:, feature_name])
         else:
-            ax = df.groupby(df.columns[f_ind_i]).agg("count").plot.bar()
+            ax = df.groupby(df.columns[feature_name]).agg("count").plot.bar()
 
         plt.ylabel("Count")
-        plt.xlabel(features[f_ind_i])
+        plt.xlabel(feature_name)
         lims += [plt.xlim()]
         # plt.xlim((df.iloc[:, f_ind_i].min(), df.iloc[:, f_ind_i].max()))
 
@@ -565,8 +566,10 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
 
         # ax = g.axes[row_i, col_j]
         plt.subplot(gs[row_i, col_j])
-        f_ind_i = features.index(top_features[row_i.item()])
-        f_ind_j = features.index(top_features[col_j.item()])
+        feature_name_i = top_features[row_i.item()]
+        feature_name_j = top_features[col_j.item()]
+        f_ind_i = features.index(feature_name_i)
+        f_ind_j = features.index(feature_name_j)
         filler_ind = [
             x for x in list(range(0, dim_features)) if x not in [f_ind_i, f_ind_j]
         ]
