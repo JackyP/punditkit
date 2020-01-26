@@ -148,7 +148,7 @@ if response in features:
 
 if df[response].isnull().values.any():
     st.sidebar.warning(
-        "Warning: Response contains NaN values. These records will be dropped in model training."
+        "Warning: Response contains NaN values. These records will be dropped in both model training and test validation metrics."
     )
 
 # Select Model
@@ -203,6 +203,9 @@ X_train, X_test, y_train, y_test = tts(X, y, test_size)
 # Drop NaN in response.
 X_train = X_train[~pd.isnull(y_train)]
 y_train = y_train[~pd.isnull(y_train)]
+
+X_test = X_test[~pd.isnull(y_test)]
+y_test = y_test[~pd.isnull(y_test)]
 
 
 @st.cache
