@@ -525,7 +525,8 @@ def classifier_pair_plot(
 ):
     """ Returns a pair plot of top features for a classifier
     """
-    dim_features = len(top_features)
+    dim_features = len(features)
+    dim_top_features = len(top_features)
     mpl.rcParams.update(mpl.rcParamsDefault)
     mpl.rcParams.update({"font.size": 8})  # For readability
     # df_not_na = df[top_features + [response]].dropna()
@@ -541,7 +542,7 @@ def classifier_pair_plot(
         pal1 = sns.color_palette("bright", df[response].nunique())
     # g = sns.PairGrid(df_not_na, vars=top_features, hue=response, palette=pal)
 
-    gs = gridspec.GridSpec(dim_features, dim_features)
+    gs = gridspec.GridSpec(dim_top_features, dim_top_features)
     fig = plt.figure()
 
     # Dummy classifier
@@ -565,7 +566,7 @@ def classifier_pair_plot(
 
     # Diag
     lims = []
-    for row_i in range(0, dim_features):
+    for row_i in range(0, dim_top_features):
         ax = plt.subplot(gs[row_i, row_i])
         feature_name = top_features[row_i]
         f_ind_i = features.index(feature_name)
@@ -581,7 +582,7 @@ def classifier_pair_plot(
         # plt.xlim((df.iloc[:, f_ind_i].min(), df.iloc[:, f_ind_i].max()))
 
     # Upper:
-    indices = zip(*np.triu_indices(dim_features, k=1))
+    indices = zip(*np.triu_indices(dim_top_features, k=1))
 
     # indices = zip(*np.triu_indices_from(g.axes, 1))
     for row_i, col_j in indices:
@@ -624,7 +625,7 @@ def classifier_pair_plot(
             plt.ylim(lims[row_i])
 
     # Lower Diag
-    indices = zip(*np.tril_indices(dim_features, k=-1))
+    indices = zip(*np.tril_indices(dim_top_features, k=-1))
     for row_i, col_j in indices:
         ax = plt.subplot(gs[row_i, col_j])
         ax.set_facecolor("grey")
