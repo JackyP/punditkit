@@ -2,6 +2,8 @@ import streamlit as st
 import sys
 import pandas as pd
 import numpy as np
+import pickle
+import base64
 from math import log10, floor
 from pandas.api.types import is_numeric_dtype
 from backend import PunditKitEstimator, all_regressors, all_classifiers
@@ -113,12 +115,6 @@ selected_model_name = st.sidebar.selectbox(
 
 SelectedModel = models[model_names.index(selected_model_name)]
 
-pdk = PunditKitEstimator(
-    Estimator=SelectedModel,
-    numeric_features=numerical_columns,
-    categorical_features=categorical_columns,
-    response=response,
-)
 
 st.write(f"# {selected_model_name}")
 
@@ -130,18 +126,28 @@ st.sidebar.markdown(
     )
 )
 
-# Fit model
+# Fit model - TODO: cache and load class
+pdk = PunditKitEstimator(
+    Estimator=SelectedModel,
+    numeric_features=numerical_columns,
+    categorical_features=categorical_columns,
+    response=response,
+)
+
 pdk.fit_data(df)
+
 
 # Save model
 # @st.cache
-def save_model_base64(pdk):
-    b64 = pdk.pipeline_to_base64()
+@st.cache
+def save_model_base64(pipe):
+    s = pickle.dumps(pipe)
+    b64 = base64.b64encode(s).decode()
     href = f'<a download="model.pickle" href="data:file/pickle;base64,{b64}">Download Model as Pickle</a>'
     return href
 
 
-href = save_model_base64(pdk)
+href = save_model_base64(pdk.pipe)
 
 st.markdown(href, unsafe_allow_html=True)
 
@@ -222,10 +228,16 @@ else:
     num_important = 1
 
 # - Lime form result
+@st.cache
+def cached_explanation(df_form, num_important, pipe):
+    return pdk.predict_explanation(df_form, num_features=num_important)
 
-pdk.predict_explanation(df_form, num_features=num_important)
+
+cached_explanation(df_form, num_important, pdk.pipe)
+
 st.pyplot()
 
+st.markdown("--------")
 # Exploratory Data Analysis - Column Info
 st.write("## Data Description")
 st.markdown(
@@ -258,6 +270,31 @@ st.markdown(
 the scatter and partial dependence plots in the later sections."""
 )
 
+st.markdown("--------")
+
+
+@st.cache
+def cached_prediction_error_plot(X_train, X_test, y_test, pipe):
+    return pdk.prediction_error_plot()
+
+
+@st.cache
+def cached_confusion_matrix_plot(X_train, X_test, y_test, pipe):
+    return pdk.confusion_matrix_plot()
+
+
+@st.cache
+def cached_standard_error(X_train, X_test, y_test, pipe):
+    return np.std(pdk.pipe.predict(pdk.X_test) - pdk.y_test, ddof=1)
+
+
+@st.cache
+def cached_coefficient_of_variation(X_train, X_test, y_test, pipe):
+    return np.std(pdk.pipe.predict(pdk.X_test) - pdk.y_test, ddof=1) / np.mean(
+        pdk.y_test
+    )
+
+
 # Performance on holdout data
 if is_numeric_dtype(df[response]):
     st.write("## Prediction Error - (Test Set)")
@@ -266,15 +303,16 @@ if is_numeric_dtype(df[response]):
 with a [Prediction Error Plot](https://www.scikit-yb.org/en/latest/api/regressor/peplot.html)
 comparing actual vs predicted values."""
     )
-    pdk.prediction_error_plot()
+    cached_prediction_error_plot(pdk.X_train, pdk.X_test, pdk.y_test, pdk.pipe)
 
     st.write(
-        "Standard error: ", np.std(pdk.pipe.predict(pdk.X_test) - pdk.y_test, ddof=1)
+        "Standard error: ",
+        cached_standard_error(pdk.X_train, pdk.X_test, pdk.y_test, pdk.pipe),
     )
     st.pyplot()
     st.write(
         "Coefficient of variation: ",
-        np.std(pdk.pipe.predict(pdk.X_test) - pdk.y_test, ddof=1) / np.mean(pdk.y_test),
+        cached_coefficient_of_variation(pdk.X_train, pdk.X_test, pdk.y_test, pdk.pipe),
     )
 else:
     st.write("## Confusion Matrix (Test Set)")
@@ -284,11 +322,11 @@ a [Confusion Matrix](https://www.scikit-yb.org/en/latest/api/classifier/confusio
 comparing actual vs predicted values. Values along the diagonal indicate a correct prediction.
 """
     )
-    pdk.confusion_matrix_plot()
+    cached_confusion_matrix_plot(pdk.X_train, pdk.X_test, pdk.y_test, pdk.pipe)
 
     st.pyplot()
 
-
+st.markdown("--------")
 st.write("## Permutation Feature Importance (Train Set)")
 
 st.markdown(
@@ -296,11 +334,18 @@ st.markdown(
 is a measure of the contribution of a feature to the model predictions."""
 )
 
-pdk.feature_importance_plot()
+
+@st.cache
+def cached_feature_importance_plot(X_train, X_test, y_test, pipe):
+    return pdk.feature_importance_plot()
+
+
+cached_feature_importance_plot(pdk.X_train, pdk.X_test, pdk.y_test, pdk.pipe)
 st.pyplot()
 
 # Key variables pairplot.
 # Seaborn pair grid
+st.markdown("--------")
 st.markdown("## Pair Grid")
 st.markdown(
     """The grid below shows:
@@ -313,9 +358,16 @@ st.markdown(
 pdk.classifier_pair_plot(df=df, num_features=num_important)
 st.pyplot()
 
+st.markdown("--------")
 st.write("## Model Predictions One-Way Plots")
 
-pdp_feature_1 = st.selectbox("Plot Feature", options=pdk.top_features, index=0)
+
+@st.cache
+def cached_top_features(X_train, X_test, y_test, pipe):
+    return pdk.top_features
+
+
+pdp_feature_1 = st.selectbox("Plot Feature", options=features, index=0)
 
 pdk.pdp_plot(pdp_feature_1)
 st.pyplot()
