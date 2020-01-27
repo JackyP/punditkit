@@ -285,7 +285,11 @@ href = save_model_base64(pipe)
 st.markdown(href, unsafe_allow_html=True)
 
 # Evaluate predictions
-st.write("## Predictions")
+st.write(
+    """## Predictions
+Make and explain predictions with the trained model.
+"""
+)
 
 # - Build form
 st.write(
@@ -521,7 +525,14 @@ top_features_n = top_features[:num_important]
 
 
 def classifier_pair_plot(
-    df, df_default, pipe, transformer, top_features, features, response
+    df,
+    df_default,
+    pipe,
+    transformer,
+    top_features,
+    features,
+    response,
+    regression_quantiles=10,
 ):
     """ Returns a pair plot of top features for a classifier
     """
@@ -545,19 +556,19 @@ def classifier_pair_plot(
     gs = gridspec.GridSpec(dim_top_features, dim_top_features)
     fig = plt.figure()
 
-    # Dummy classifier
-    class clf:
+    # Dummy estimator that predicts categoricals even for regression
+    class DummyEstimator:
         model = pipe
         is_num = is_numeric
 
         def predict(self, X):
             y = self.model.predict(X)
             if self.is_num:
-                return pd.qcut(y, 10, labels=False, duplicates="drop")
+                return pd.qcut(y, regression_quantiles, labels=False, duplicates="drop")
             else:
                 return np.searchsorted(pipe.classes_, y)
 
-    clf0 = clf()
+    estimator = DummyEstimator()
 
     if is_numeric:
         resp_plt = pd.qcut(df[response], 10, labels=False, duplicates="drop").values
@@ -608,7 +619,7 @@ def classifier_pair_plot(
             y=resp_plt,
             feature_index=(f_ind_j, f_ind_i),
             filler_feature_values=filler,
-            clf=clf0,
+            clf=estimator,
             colors=",".join(pal0.as_hex()),
         )
         if len(filler_ind) > 0:
