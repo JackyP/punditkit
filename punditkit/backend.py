@@ -193,7 +193,7 @@ class PunditKitEstimator:
         self.top_features.reverse()
 
         # Explainer
-        X_numeric = self.transform_numeric.transform(X_train)
+        self.X_numeric = self.transform_numeric.transform(X_train)
 
         categorical_feature_indices = [
             self.features.index(x) for x in self.categorical_features
@@ -201,7 +201,7 @@ class PunditKitEstimator:
 
         if self.response_is_numeric:
             self.explainer = lime.lime_tabular.LimeTabularExplainer(
-                X_numeric,
+                self.X_numeric,
                 feature_names=self.features,
                 class_names=[self.response],
                 discretize_continuous=True,
@@ -211,7 +211,7 @@ class PunditKitEstimator:
 
         else:
             self.explainer = lime.lime_tabular.LimeTabularExplainer(
-                X_numeric,
+                self.X_numeric,
                 feature_names=self.features,
                 class_names=self.pipe.classes_.tolist(),
                 discretize_continuous=True,
@@ -432,46 +432,24 @@ class PunditKitEstimator:
         fig.tight_layout()
 
     def pdp_plot(self, pdp_feature_1):
-        if pdp_feature_1 in self.numeric_features:
-            pdp_isol = pdp.pdp_isolate(
-                model=self.pipe,
-                dataset=self.X,
-                model_features=self.features,
-                feature=pdp_feature_1,
-            )
 
-            fig, axes = pdp.pdp_plot(
-                pdp_isol,
-                pdp_feature_1,
-                plot_lines=True,
-                frac_to_plot=100,
-                ncols=1,
-                figsize=[8.0, 6.0],
-            )
-            plt.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
-            plt.margins(0.01, 0.01)
-            fig.tight_layout()
+        pdp_isol = pdp.pdp_isolate(
+            model=self.numeric_pipe,
+            dataset=self.X_numeric,
+            model_features=self.features,
+            feature=pdp_feature_1,
+        )
 
-        else:
-            # scikit learn pipeline does not produce named columns
-            # however pdpbox requires them. So make own pdp plot.
-            df_pdp_other = (
-                self.X[self.features].drop(columns=pdp_feature_1).assign(dummy=1)
-            )
-            df_pdp_feat = self.X[[pdp_feature_1]].assign(dummy=1)
+        fig, axes = pdp.pdp_plot(
+            pdp_isol,
+            pdp_feature_1,
+            plot_lines=True,
+            frac_to_plot=100,
+            ncols=1,
+            figsize=[8.0, 6.0],
+        )
+        plt.subplots_adjust(top=0.95, bottom=0.05, left=0.05, right=0.95)
+        plt.margins(0.01, 0.01)
+        fig.tight_layout()
 
-            df_pdp = (
-                df_pdp_other.merge(df_pdp_feat, on="dummy")[self.features]
-                .assign(predict=lambda df: self.pipe.predict(self.X))
-                .loc[:, [pdp_feature_1, "predict"]]
-                .groupby(pdp_feature_1)
-                .agg("mean")
-                .reset_index()
-            )
-            df_pdp.plot(
-                title=f'PDP for feature "{pdp_feature_1}"',
-                x=pdp_feature_1,
-                y="predict",
-                kind="bar",
-            )
         return fig
