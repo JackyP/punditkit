@@ -37,7 +37,11 @@ from sklearn.inspection import permutation_importance
 from pdpbox import pdp
 from yellowbrick.regressor import PredictionError
 from yellowbrick.classifier.confusion_matrix import ConfusionMatrix
-from mlxtend_plotting import plot_decision_regions
+
+try:
+    from mlxtend_plotting import plot_decision_regions
+except ModuleNotFoundError:
+    from .mlxtend_plotting import plot_decision_regions
 
 # All estimators
 regressors = all_estimators(type_filter="regressor")
@@ -435,7 +439,7 @@ class PunditKitEstimator:
 
         pdp_isol = pdp.pdp_isolate(
             model=self.numeric_pipe,
-            dataset=self.X_numeric,
+            dataset=pd.DataFrame(self.X_numeric, columns=self.features),
             model_features=self.features,
             feature=pdp_feature_1,
         )
