@@ -330,7 +330,6 @@ for col in features:
 
 df_form = pd.DataFrame([list_form], columns=features)
 df_default = pd.DataFrame([default_form], columns=features)
-df_default_no_col = pd.DataFrame([default_form])
 
 if is_numeric_dtype(df[response]):
     st.write("### Predicted Value:", pipe.predict(df_form).item())
