@@ -24,7 +24,12 @@ import lime.lime_tabular
 # Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, RobustScaler
+from sklearn.preprocessing import (
+    OneHotEncoder,
+    OrdinalEncoder,
+    RobustScaler,
+    FunctionTransformer,
+)
 from sklearn.pipeline import Pipeline
 
 from sklearn.utils import all_estimators
@@ -210,10 +215,15 @@ y_test = y_test[~pd.isnull(y_test)]
 
 @st.cache
 def make_fit_pipe(
-    categorical_columns, numerical_columns, X_train, y_train, SelectedModel
+    categorical_columns,
+    numerical_columns,
+    X_train,
+    y_train,
+    SelectedModel,
+    sparse=False,
 ):
     # Ordinal encoder for lime
-    categorical_pipe = Pipeline(
+    ordinal_pipe = Pipeline(
         [
             ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
             ("ordinal", OrdinalEncoder()),
@@ -224,19 +234,24 @@ def make_fit_pipe(
     prenumeric = ColumnTransformer(
         [
             ("numimp", SimpleImputer(), [features.index(x) for x in numerical_columns]),
-            ("cat", categorical_pipe, [features.index(x) for x in categorical_columns]),
+            ("cat", ordinal_pipe, [features.index(x) for x in categorical_columns]),
         ]
     )
 
+    # Round to int to avoid issues with decision boundary sampling non integers
+    # for the range.
     # One Hot for most Sci-kit Learn functions.
+    one_hot_pipe = Pipeline(
+        [
+            ("rint", FunctionTransformer(np.rint)),
+            ("onehot", OneHotEncoder(sparse=sparse, handle_unknown="ignore")),
+        ]
+    )
+
     preprocessing = ColumnTransformer(
         [
             ("num", RobustScaler(), [features.index(x) for x in numerical_columns]),
-            (
-                "onehot",
-                OneHotEncoder(sparse=False),
-                [features.index(x) for x in categorical_columns],
-            ),
+            ("onepipe", one_hot_pipe, [features.index(x) for x in categorical_columns]),
         ]
     )
 
@@ -506,13 +521,17 @@ top_features.reverse()
 top_features_n = top_features[:num_important]
 
 
-def classifier_pair_plot(df, pipe, top_features, features, response):
+def classifier_pair_plot(
+    df, df_default, pipe, transformer, top_features, features, response
+):
     """ Returns a pair plot of top features for a classifier
     """
     dim_features = len(top_features)
     mpl.rcParams.update(mpl.rcParamsDefault)
     mpl.rcParams.update({"font.size": 8})  # For readability
     # df_not_na = df[top_features + [response]].dropna()
+    vals_default = pd.DataFrame(transformer.transform(df_default))
+
     is_numeric = is_numeric_dtype(df[response])
 
     if is_numeric:
@@ -580,12 +599,12 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
         # mlxtend decision regions requries a dummy set of variables if there
         # are more than two features.
         if len(features) > 2:
-            filler = df_default_no_col[filler_ind].to_dict("records")[0]
+            filler = vals_default[filler_ind].to_dict("records")[0]
         else:
             filler = None
 
         plot_decision_regions(
-            X=df[features].values,
+            X=transformer.transform(df[features].values),
             y=resp_plt,
             feature_index=(f_ind_j, f_ind_i),
             filler_feature_values=filler,
@@ -620,7 +639,15 @@ def classifier_pair_plot(df, pipe, top_features, features, response):
     fig.tight_layout()
 
 
-classifier_pair_plot(df, pipe, top_features_n, features, response)
+classifier_pair_plot(
+    df=df,
+    df_default=df_default,
+    pipe=pipe_lime,
+    transformer=transform_lime,
+    top_features=top_features_n,
+    features=features,
+    response=response,
+)
 st.pyplot()
 
 st.write("## Model Predictions One-Way Plots")
