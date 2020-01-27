@@ -39,7 +39,7 @@ from sklearn.inspection import permutation_importance
 from pdpbox import pdp
 from yellowbrick.regressor import PredictionError
 from yellowbrick.classifier.confusion_matrix import ConfusionMatrix
-from mlxtend.plotting import plot_decision_regions
+from mlxtend_plotting import plot_decision_regions
 
 regressors = all_estimators(type_filter="regressor")
 classifiers = all_estimators(type_filter="classifier")
@@ -539,15 +539,16 @@ def classifier_pair_plot(
     dim_features = len(features)
     dim_top_features = len(top_features)
     mpl.rcParams.update(mpl.rcParamsDefault)
-    mpl.rcParams.update({"font.size": 8})  # For readability
+    mpl.rcParams.update({"font.size": 6})  # For readability
     # df_not_na = df[top_features + [response]].dropna()
+    vals_df = transform_lime.transform(df[features])
     vals_default = pd.DataFrame(transformer.transform(df_default))
 
     is_numeric = is_numeric_dtype(df[response])
 
     if is_numeric:
-        pal0 = sns.color_palette("GnBu_d", 10)
-        pal1 = sns.color_palette("GnBu_r", 10)
+        pal0 = sns.color_palette("GnBu_d", regression_quantiles)
+        pal1 = sns.color_palette("GnBu_r", regression_quantiles)
     else:
         pal0 = sns.color_palette("muted", df[response].nunique())
         pal1 = sns.color_palette("bright", df[response].nunique())
@@ -571,11 +572,13 @@ def classifier_pair_plot(
     estimator = DummyEstimator()
 
     if is_numeric:
-        resp_plt = pd.qcut(df[response], 10, labels=False, duplicates="drop").values
+        resp_plt = pd.qcut(
+            df[response], regression_quantiles, labels=False, duplicates="drop"
+        ).values
     else:
         resp_plt = df[response].astype("category").cat.codes.values
 
-    # Diag
+    # Diagonals: Numeric - Dist Plot, Categorical - Bar Plot
     lims = []
     for row_i in range(0, dim_top_features):
         ax = plt.subplot(gs[row_i, row_i])
@@ -583,9 +586,13 @@ def classifier_pair_plot(
         f_ind_i = features.index(feature_name)
         # plt.hist(x=df.iloc[:, f_ind_i])
         if is_numeric_dtype(df.loc[:, feature_name]):
-            ax = sns.distplot(df.loc[:, feature_name])
+            ax = sns.distplot(df.loc[:, feature_name].dropna())
         else:
-            ax = df.groupby(feature_name).agg("count").plot.bar()
+            # Truncate long category names to avoid cluttering the axis
+            kwargs = {feature_name: lambda df: df[feature_name].str.slice(0, 5)}
+            df.groupby(feature_name).size().reset_index(name="counts").assign(
+                **kwargs
+            ).plot.bar(ax=ax, x=feature_name, y="counts", legend=False)
 
         plt.ylabel("Count")
         plt.xlabel(feature_name)
@@ -599,7 +606,7 @@ def classifier_pair_plot(
     for row_i, col_j in indices:
 
         # ax = g.axes[row_i, col_j]
-        plt.subplot(gs[row_i, col_j])
+        ax = plt.subplot(gs[row_i, col_j])
         feature_name_i = top_features[row_i.item()]
         feature_name_j = top_features[col_j.item()]
         f_ind_i = features.index(feature_name_i)
@@ -614,6 +621,7 @@ def classifier_pair_plot(
         else:
             filler = None
 
+        mpl.rcParams.update({"contour.negative_linestyle": "dotted"})
         plot_decision_regions(
             X=transformer.transform(df[features].values),
             y=resp_plt,
@@ -621,19 +629,21 @@ def classifier_pair_plot(
             filler_feature_values=filler,
             clf=estimator,
             colors=",".join(pal0.as_hex()),
+            hide_spines=False,
         )
+
         if len(filler_ind) > 0:
             plt.scatter(
-                x=df.loc[:, feature_name_j],
-                y=df.loc[:, feature_name_i],
+                x=vals_df[:, features.index(feature_name_j)],
+                y=vals_df[:, features.index(feature_name_i)],
                 s=3,
                 c=resp_plt,
                 cmap=ListedColormap(pal1.as_hex()),
             )
-            plt.xlabel(features[f_ind_j])
-            plt.ylabel(features[f_ind_i])
-            plt.xlim(lims[col_j])
-            plt.ylim(lims[row_i])
+        plt.xlabel(features[f_ind_j])
+        plt.ylabel(features[f_ind_i])
+        plt.xlim(lims[col_j])
+        plt.ylim(lims[row_i])
 
     # Lower Diag
     indices = zip(*np.tril_indices(dim_top_features, k=-1))
