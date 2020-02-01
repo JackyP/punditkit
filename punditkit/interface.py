@@ -155,7 +155,6 @@ if hyperparam_select:
                         hyperparam[k] = val
             else:
                 hyperparam[k] = val
-    st.write(hyperparam)
 
 
 # Fit model - TODO: cache and load class
