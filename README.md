@@ -1,7 +1,9 @@
-# PunditKit:
+# PunditKit
+
 Simplify. Visualise. Learn.
 
 ![Screenshot](Screenshot.jpg)
+
 
 PunditKit is a free toolkit for exploratory data analysis and modelling of
 tabular data - such as a database or a spreadsheet - with a simple interface,
@@ -41,6 +43,7 @@ To use punditkit on the dataset, run:
 ```
 punditkit iris.csv
 ```
+
 
 Currently only Comma Separated Values (CSV) datasets are supported. Datasets
 within Excel spreadsheets can be analysed using punditkit, use Save As CSV from
