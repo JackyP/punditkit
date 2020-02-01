@@ -8,7 +8,7 @@ with open("requirements.txt") as f:
 
 setuptools.setup(
     name="punditkit",
-    version="0.0.1",
+    version="0.0.2",
     author="Jacky Poon",
     author_email="jackypn@gmail.com",
     description="PunditKit: A GUI for Scikit-Learn Models",

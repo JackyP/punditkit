@@ -1,22 +1,26 @@
 # PunditKit
+
 Simplify. Visualise. Learn.
 
 ![Screenshot](Screenshot.jpg)
 
-PunditKit is a toolkit for training machine learning models on tabular data
-simply and without code. It is intended for students and experienced data
-scientists who are looking to quickly obtain some initial predictive insights
-from data.
+
+PunditKit is a free toolkit for exploratory data analysis and modelling of
+tabular data - such as a database or a spreadsheet - with a simple interface,
+visual diagnostics, and the choice of a large number of different models.
 
 Included Features:
- - Machine learning using [scikit-learn](https://scikit-learn.org)
+ - Machine learning models using [scikit-learn](https://scikit-learn.org)
  - Interpretable explanations of predictions using [lime](https://github.com/marcotcr/lime)
- - Exploratory data summaries and model performance on holdout data for checks
- - Partial dependence plots
+ - Exploratory data summaries for checking datasets
+ - Model diagnostics for evaluating the effectiveness of different models
+ - Feature importance: identify key drivers of the response
+ - Partial dependence plots: understand relationships with a particular feature.
 
 PunditKit is under active development. The goal is to develop an opinionated
-modelling framework with best practice modelling and visualisation. If you
-encounter any problems, please raise an [issue](https://github.com/JackyP/punditkit/issues).
+modelling framework with best practice modelling and visualisation techniques.
+If you encounter any problems or have any feature requests, please consider
+raising an [issue](https://github.com/JackyP/punditkit/issues).
 
 ## Installation (via pip)
 PunditKit is developed using Python. First download and install a Python 3.x
@@ -40,5 +44,7 @@ To use punditkit on the dataset, run:
 punditkit iris.csv
 ```
 
-Currently only Comma Separated Values (CSV) datasets are supported. For Excel
-spreadsheets, please Save As CSV to analyse using punditkit.
+
+Currently only Comma Separated Values (CSV) datasets are supported. Datasets
+within Excel spreadsheets can be analysed using punditkit, use Save As CSV from
+within Excel to convert to the right format.
