@@ -79,7 +79,13 @@ all_classifiers = [x for x in classifiers if x[0] not in excluded_classifiers]
 
 class PunditKitEstimator:
     def __init__(
-        self, Estimator, numeric_features, categorical_features, response, sparse=False
+        self,
+        Estimator,
+        numeric_features,
+        categorical_features,
+        response,
+        kwargs=None,
+        sparse=False,
     ):
         """
 
@@ -141,7 +147,7 @@ class PunditKitEstimator:
             [
                 ("prenumeric", prenumeric),
                 ("preprocess", preprocessing),
-                ("estimator", Estimator()),
+                ("estimator", Estimator(**kwargs)),
             ]
         )
         self.Estimator = Estimator

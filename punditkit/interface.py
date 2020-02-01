@@ -1,4 +1,5 @@
 import streamlit as st
+import inspect
 import sys
 import pandas as pd
 import numpy as np
@@ -126,12 +127,44 @@ st.sidebar.markdown(
     )
 )
 
+hyperparam_select = st.sidebar.checkbox("Set hyperparameters")
+
+hyperparam = {}
+if hyperparam_select:
+    signature = inspect.signature(SelectedModel.__init__)
+    for k, v in signature.parameters.items():
+        if k != "self":
+            if type(v.default) == str:
+                val = st.sidebar.text_input(k, value=v.default)
+            elif type(v.default) == int:
+                val = st.sidebar.number_input(k, value=v.default)
+            elif type(v.default) == float:
+                val = st.sidebar.number_input(k, value=v.default)
+            else:
+                val = st.sidebar.text_input(k, value="None")
+
+            if val == "None":
+                hyperparam[k] = None
+            elif type(val) == str:
+                try:
+                    hyperparam[k] = int(val)
+                except ValueError:
+                    try:
+                        hyperparam[k] = float(val)
+                    except ValueError:
+                        hyperparam[k] = val
+            else:
+                hyperparam[k] = val
+    st.write(hyperparam)
+
+
 # Fit model - TODO: cache and load class
 pdk = PunditKitEstimator(
     Estimator=SelectedModel,
     numeric_features=numerical_columns,
     categorical_features=categorical_columns,
     response=response,
+    kwargs=hyperparam,
 )
 
 pdk.fit_data(df)
